@@ -1,0 +1,80 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: prophesy
+      POSTGRES_PASSWORD: prophesy
+      POSTGRES_DB: prophesy
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prophesy -d prophesy"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgres://prophesy:prophesy@postgres:5432/prophesy?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      PORT: "8080"
+      CORS_ORIGIN: http://localhost:3000
+      ORACLE_SECRET: ${ORACLE_SECRET:-dev-oracle-secret}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  oracle:
+    build:
+      context: ./oracle
+    ports:
+      - "8001:8000"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      BACKEND_URL: http://backend:8080
+      ORACLE_SECRET: ${ORACLE_SECRET:-dev-oracle-secret}
+      ORACLE_ENABLE_WORKER: ${ORACLE_ENABLE_WORKER:-false}
+      ORACLE_POLL_INTERVAL_SEC: ${ORACLE_POLL_INTERVAL_SEC:-300}
+      SEARCH_MAX_RESULTS: ${SEARCH_MAX_RESULTS:-5}
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8080
+        NEXT_PUBLIC_WS_URL: ws://localhost:8080
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      NEXT_PUBLIC_WS_URL: ws://localhost:8080
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

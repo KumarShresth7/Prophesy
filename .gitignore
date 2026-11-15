@@ -1,0 +1,23 @@
+.env
+.env.local
+*.pem
+
+# Go
+backend/bin/
+
+# Python
+oracle/venv/
+oracle/__pycache__/
+oracle/agent/
+*.pyc
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Node
+web/node_modules/
+web/.next/
+web/out/
+
+# OS
+.DS_Store
